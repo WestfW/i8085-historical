@@ -1,0 +1,68 @@
+	Universal SYMS -- Symbol defs for Godbout SS1 card
+
+define SS1	 ;;;Board level definitions
+<
+M8259L==	IOBASE+0	; master 8259A lower port
+M8259U==	IOBASE+1	; master 8259A upper port
+S8259L==	IOBASE+2	; slave 8259A lower port
+S8259U==	IOBASE+3	; slave 8259A upper port
+.TC0==		IOBASE+4	; Timer counter 0
+.TC1==		IOBASE+5	; Timer counter 1
+.TC2==		IOBASE+6	; Timer counter 2
+.TCCR==		IOBASE+7	; Timer/Counter control register
+.9511D==	IOBASE+10	; Math chip data port
+.9511C==	IOBASE+11	; Math chip command port
+.UARTD==	IOBASE+14	; Uart Data
+.UARTS==	IOBASE+15	; Uart Status
+.UARTM==	IOBASE+16	; Uart mode
+.UARTC==	IOBASE+17	; Uart Command
+>
+
+define U2651	;;; 2651 Uart definitions
+<
+;Status register
+.TxRDY==	1		; transmitter ready
+.RxRDY==	2		; Received character available
+.TxEMT==	4		; Transmitter shift register empty
+.DSCHG==	4		; DSR or DCD has changed
+.PE==		10		; Parity error
+.OR==		20		; overrun error
+.FE==		40		; Framing error
+.ERR==		70		; any of above 3
+.DCD==		100		; Data carrier Detect
+.CSR==		200		; Data Set Ready
+
+;Mode register
+.MDMUL==		2		; Asynch / 16X baud rate
+..5bit==	0		; 5 bit chars
+..6bit==	4
+..7bit==	10
+..8bit==	14		; 8 bit chars
+.PENBL==	20		; enable parity
+.PEVEN==	40		;  even
+.PODD==		0		;  odd
+.STP1==		100		; one stop bit
+.STP15==	200		; 1.5 stop bits
+.STP2==		300		; 2
+.NORM== ..8bit ! .STP1 ! .MDMUL
+
+.MD2==		160		; 2nd mode word, high bits
+.S110==		2
+.S300==		5
+.S600==		6
+.S1200==	7
+.S2400==	11
+.S4800==	14
+.S9600==	16
+.S192K==	17		; 19.2 K baud
+
+;;;Command register
+.TENBL==	1		; transmitter enable
+.DTR==		2		; Data Terminal ready
+.RENBL==	4		; Receiver enable
+.BREAK==	10		; force a break
+.RESET==	20		; reset error flags
+.RTS==		40		; Request To Send
+>
+
+	end

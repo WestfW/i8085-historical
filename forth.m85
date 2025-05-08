@@ -1,0 +1,674 @@
+	title	Forth interpreter/compiler
+;	from	Feb/Mar 1981 Kilobaud Microcomputing Magizne
+;		articles by Richard Fritzson
+;	modified for this use by William E Westfield
+
+	search	8085A
+	INIT
+
+;	lall
+
+
+	MEMSIZE= 20K		;16 K of memory
+
+
+define	variable(a) < ADDR .variable
+			ADDR A	>
+
+	define S(A,B< >,C< >)
+<	addr	A
+ifnb <B>,<addr	B>
+ifnb <C>,<addr	C>
+>
+
+	define	msg(a,%A,%B)
+<	s	tpush,%A,prints
+	s	JUMP,%B-1
+%A:	ascii	6,A
+%B:	>
+
+	define	CONSTANT(A)
+<	addr	.const
+	word	A
+>
+	define	CODE< addr .+2 >
+
+	define	CRET<	jmp	NEXT	>
+
+	define	ASCII(len,string)
+<	byte	len
+	irpc	string,<byte "string">
+>
+
+	org	74
+	ei
+	ret			;interupt address
+
+	org 100
+
+	mvi	340
+	sim
+	ei
+	lxi	SP,stack
+	call	DICMOVE
+	lxi	HL,TOP-1
+	shld	PC
+	CRet
+
+TOP:	msg	TOP...
+	s	EXEC,PEEKW
+	s	EXECUTE
+	s	JUMP,TOP-1
+
+EXEC:	variable	interact
+
+	block	200
+stack== .
+
+PC:	block 2
+
+RSTACK:	block 160
+
+NEXT:	lhld	PC
+	inx	HL
+	mov	E,M
+	inx	HL
+	mov	D,M
+	shld	PC
+	xchg
+	mov	E,M
+	inx	HL
+	mov	D,M
+	xchg
+	pchl
+
+TCALL:	lhld	PC
+	xchg
+	shld	PC
+	lhld	RSTACK
+	mov	M,E
+	inx	HL
+	mov	M,D
+	inx	HL
+	shld	RSTACK
+	CRet
+
+TRET:	code
+	lhld	RSTACK
+	dcx	HL
+	mov	D,M
+	dcx	HL
+	mov	E,M
+	shld	RSTACK
+	xchg
+	shld	PC
+	CRet
+
+INC:	code
+	pop	HL
+	inx	HL
+	push	HL
+	CRet
+
+DEC:	code
+	pop	HL
+	dcx	HL
+	push	HL
+	CRet
+
+TADD:	code
+	pop	HL
+	pop	DE
+	dad	DE
+	push	HL
+	CRet
+
+MINUS:	code
+	pop	HL
+	call	MINUSH
+	push	HL
+	CRet
+
+MINUSH:	dcx	HL
+	mov	A,H
+	CMA
+	mov	H,A
+	mov	A,L
+	cma
+	mov	L,A
+	ret
+
+TSUB:	s	TCALL
+	s	MINUS
+	s	TADD
+	s	TRET
+
+PEEKB:	code
+	pop	HL
+	mov	E,M
+	mvi	D,0
+	push	DE
+	CRet
+
+PEEKW:	code
+	pop	HL
+	mov	E,M
+	inx	HL
+	mov	D,M
+	push	DE
+	CRet
+
+POKEB:	code
+	pop	HL
+	pop	DE
+	mov	M,E
+	CRet
+
+POKEW:	code
+	pop	HL
+	pop	DE
+	mov	M,E
+	inx	HL
+	mov	M,D
+	CRet
+
+TPUSH:	code
+	lhld	PC
+	inx	HL
+	mov	E,M
+	inx	HL
+	mov	D,M
+	shld	PC
+	push	DE
+	CRet
+
+TPOP:	code
+	pop	HL
+	CRet
+
+SWAP:	code
+	pop	HL
+	xthl
+	push	HL
+	CRet
+
+DUP:	code
+	pop	HL
+	push	HL
+	push	HL
+	CRet
+
+CLEAR:	code
+	lxi	SP,STACK
+	CRet
+
+JUMP:	code
+JUMP1:	lhld	PC
+	inx	HL
+	mov	E,M
+	inx	HL
+	mov	D,M
+	xchg
+	shld	PC
+	CRet
+
+IFZ:	code
+	pop	HL
+TSTZ:	mov	A,H
+	ora	L
+	JZ	JUMP1
+SKIP:	lhld	PC
+	inx	HL
+	inx	HL
+	shld	PC
+	CRet
+
+IFNZ:	code
+	pop	HL
+	mov	A,H
+	ora	L
+	jnz	JUMP1
+	jmp	SKIP
+
+IFEQ:	code
+	pop	HL
+	call	MINUSH
+	pop	DE
+	dad	de
+	jmp	TSTZ
+
+	subttl	Constants  (listing 9)
+
+.CONST:	xchg
+	inx	HL
+	mov	E,M
+	inx	HL
+	mov	D,M
+	push	DE
+	CRet
+
+ZERO:	constant	0
+ONE:	constant	1
+NEGONE:	constant	-1
+MEMORY:	constant	MEMSIZE
+
+.variable:
+	INX	DE
+	push	DE
+	CRet
+	subttl	Top level External Interpreter
+;		(listing 10)
+
+Interact:
+
+	s	tcall
+	msg	INTERA
+	s	prompt
+	s	readln
+SLOOP:	s	scan
+	s	ifz
+	s	 exit-1
+	s	lookup
+	s	ifz
+	s	 number-1
+;	msg	.EXECU
+	s	execute
+	s	jump
+	s	 SLOOP-1
+NUMBER:	s	CONAXB
+	s	ifnz
+	s	 SLOOP-1
+	s	tpush
+	s	 ERRMSG
+	s	prints
+	s	prints
+	s	tret
+
+EXIT:	msg	..EXIT
+	s	dup
+	s	 conbxa
+	s	prints
+	s	tret
+
+ERRMSG:	ascii	^d13,<Not Defined: >
+
+	subttl	directory lookup routine
+
+LOOKUP:	s	TCALL
+;	msg	LOOKUP
+	s	NAMES,PEEKW
+	
+
+SEARCH:
+;	msg	search
+	s	dup
+	s	 peekb
+	s	ifz
+	s	 fail-1
+
+	s	match
+	s	ifnz
+	s	 suceed-1
+	s	first
+	s	 tadd
+	s	tpush
+	s	 2
+	s	 tadd
+	s	jump
+	s	 search-1
+
+FAIL:
+;	msg	FAIL..
+	s	tpop
+	s	zero
+	s	tret
+
+suceed:
+;	msg	Suceed
+	s	swap
+	s	 tpop
+	s	first
+	s	 tadd
+	s	 peekw
+	s	negone
+	s	tret
+
+NAMES:	variable	NAMEBEG
+
+MATCH:	code
+	pop	HL
+	pop	DE
+	push	DE
+	push	HL
+	ldax	DE
+	cmp	M
+	jnz	MATCHF
+
+	mov	B,A
+match1:	inx	HL
+	inx	DE
+	ldax	DE
+	cmp	M
+	jnz	matchf
+	dcr	B
+	jnz	match1
+	lxi	HL,-1
+	push	HL
+	CRet
+matchf:	lxi	HL,0
+	push	HL
+	CRet
+
+EXECUTE:
+	code
+	pop	HL
+	mov	E,M
+	inx	HL
+	mov	D,M
+	xchg
+	pchl
+
+readln:	s	tcall
+;	msg	READLN
+	s	zero
+	s	conbuf
+	s	 pokeb
+	s	conbuf
+	s	inc
+	s	inc
+rloop:	s	dup
+	s	cin
+	s	dup
+	s	cout
+	s	dup
+	s	tpush
+	s	177
+	s	ifeq
+	s	 bksp-1
+	s	dup
+	s	tpush
+	s	 15
+	s	ifeq
+	s	 eol-1
+	s	swap
+	s	pokeb
+	s	inc
+	s	jump
+	s	 rloop-1
+BKSP:	s	tpop
+	s	tpop
+	s	dec
+	s	tpush,10,cout
+	s	tpush
+	s	 40
+	s	cout
+	s	tpush
+	s	 10
+	s	cout
+	s	jump
+	s	 rloop-1
+EOL:	s	tpop
+	s	tpop
+	s	zero
+	s	swap
+	s	pokeb
+	s	tpush
+	s	 12
+	s	cout
+	s	tret
+
+CONBUF:	variable	0
+	block	^d100
+
+Prompt:	s	tcall
+	s	tpush
+	s	 prmpt
+	s	prints
+	s	tret
+
+PRMPT:	exp	3,15,12,"-"
+
+PrintS:	s	TCALL
+	s	first
+PrntS1:	s	dup
+	s	ifz
+	s	 printx-1
+	s	swap,first
+	s	cout
+	s	swap,dec
+	s	jump,prnts1-1
+
+PrintX:	s	tpop,tpop
+	s	tret
+
+FIRST:	code
+	pop	HL
+	mov	C,M
+	mvi	B,0
+	inx	HL
+	push	HL
+	push	BC
+	CRet
+
+COUT:	code
+	pop	BC
+	mov	A,C
+	out	0		;output to terminal
+	CRet
+
+CIN:	code
+INLP:	in	0		;read from terminal
+	ora	A		;test MSB
+	jm	GOTC
+	hlt
+	jmp	INLP
+GOTC:	ani	177
+	cpi	12
+	jz	inlp
+	mov	L,A
+	mvi	H,0
+	push	HL
+	CRet
+
+	Subttl	Listing 15
+
+SCAN:	code
+	lxi	HL,CONBUF+2
+	mov	C,M
+	mvi	B,0
+	inr	M
+	jz	SCANX
+	inx	HL
+	dad	BC
+	mov	B,C
+SCAN1:	inx	HL
+	inr	B
+	mov	A,M
+	ora	A
+	jz	SCANX
+	cpi	40
+	jz	SCAN1
+	lxi	DE,CONBUF+3
+	mvi	C,0
+SCAN2:	inx	DE
+	stax	DE
+	inr	C
+	inr	B
+	inx	HL
+	mov	A,M
+	ora	A
+	jnz	SCAN3
+	mvi	B,-1
+	mvi	A,40
+SCAN3:	cpi	40
+	jnz	SCAN2
+	lxi	HL,CONBUF+2
+	mov	M,B
+	inx	HL
+	mov	M,C
+	push	HL
+	lxi	HL,-1
+	push	HL
+	CRet
+
+SCANX:	mvi	A,-1
+	sta	CONBUF+2
+	lxi	HL,0
+	push	HL
+	CRet
+
+CONBXA:	s	TCALL
+;	msg	CONBXA
+	s	negone,swap
+CONB1:	s	tpush,10,div
+	s	swap
+	s	dup
+	s	ifnz,conb1-1
+	s	tpop
+	s	zero
+	s	nbufr,pokeb
+CONB2:	s	dup,negone
+	s	ifeq,conb3-1
+	s	nbufr,pokeb
+	s	tpush,"0",tadd
+	s	nbufr
+	s	nbufr,peekb,tadd
+	s	pokeb
+	s	jump,conb2-1
+
+CONB3:	s	tpop
+	s	nbufr
+	s	tret
+
+NBUFR:	variable	0
+	block 	9
+
+CONAXB:	code
+	pop	DE
+	push	DE
+	ldax	DE
+	mov	B,A
+	lxi	HL,0
+CONA1:	inx	DE
+	ldax	DE
+	cpi	"0"
+	jc	CONAX
+	cpi	"9"+1
+	jnc	CONAX
+	sui	"0"
+	push	DE
+	dad	HL
+	push	HL
+	dad	HL
+	dad	HL
+	pop	DE
+	dad	DE
+	mov	E,A
+	mvi	D,0
+	dad	DE
+	pop	DE
+	dcr	B
+	jnz	CONA1
+	pop	DE
+	push	HL
+	lxi	HL,-1
+	push	HL
+	jmp	NEXT
+CONAX:	lxi	HL,0
+	push	HL
+	jmp	NEXT
+
+DIV:	code
+	pop	BC
+	pop	DE
+	lxi	HL,0
+	call	DIV1
+	push	DE
+	push	HL
+	jmp	NEXT
+
+DIV1:	DCX	BC
+	MOV	A,B
+	cma
+	mov	B,A
+	mov	A,C
+	cma
+	mov	C,A
+	mvi	A,20
+DIV2:	dad	HL
+	push	PSW
+	xchg
+	dad	HL
+	xchg
+	jnc	DIV3
+	inr	L
+DIV3:	pop	PSW
+	jc	DIV5
+	push	HL
+	dad	BC
+	jc	DIV4
+	pop	HL
+	jmp	DIV6
+DIV4:	inr	E
+	inx	SP
+	inx	SP
+	jmp	DIV6
+DIV5:	dad	BC
+	inr	E
+DIV6:	dcr	a
+	jnz	DIV2
+	ret
+
+NAMEBEG=	.
+define	Entry(a,b,c)<
+	ascii	a,<b>
+	ifb <c>,<	s	b	>
+	ifnb <c>,<	s	c	> >
+
+	Entry	1,+,tadd
+	Entry	1,-,tsub
+	Entry	4,/mod,div
+	Entry	7,execute
+	Entry	5,clear
+	Entry	5,match
+	Entry	6,lookup
+	Entry	4,exec
+	Entry	6,memory
+	Entry	6,conbxa
+	Entry	3,inc
+	Entry	3,dec
+	Entry	5,minus
+	Entry	5,peekw
+	Entry	5,peekb
+	Entry	5,pokew
+	Entry	5,pokeb
+	Entry	3,pop,tpop
+	Entry	4,swap
+	Entry	3,dup
+	Entry	5,first
+	0
+NAMEND= .-1
+
+DICSIZE= NAMEND-NAMEBEG+1
+DICMOVE:
+	lhld	memory+2
+	xchg
+	lxi	HL,NAMEND
+	lxi	BC,DICSIZE
+
+
+DIC1:	mov	A,M
+	stax	DE
+	dcx	HL
+	dcx	DE
+	dcx	BC
+	mov	A,B
+	ora	C
+	jnz	DIC1
+	xchg
+	inx	HL
+	shld	NAMES+2
+	ret
+
+	end
+

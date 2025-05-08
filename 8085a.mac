@@ -1,0 +1,158 @@
+	universal 8085A cross assembler
+	.directive .nobin
+
+;	Copyright 1981 by William E Westfield
+;	No rights reserved -- Help yourself...
+
+;	contains macro definitions etc to create 8085 code right justfied
+;	in each 36 bit word. octal numbers are used.
+
+
+;	register definitions
+
+	A==	7
+	B==	0
+	C==	1
+	D==	2
+	E==	3
+	H==	4
+	L==	5
+	M==	6
+	BC==	0
+	DE==	1
+	HL==	2
+	SP==	3
+	PSW==	3
+
+
+	define INIT <loc 0
+		sall
+		rim10 >
+	define %HIGH(a) < %low <<a>/^d256> >
+	define %LOW (a) < <a> & ^o377 >
+	define BYTE (a) <%low(a)
+			ifg a-^d255,<%msg \., ?Illegal 8 bit value: 'a> >
+	define WORD (a) <%low(a)
+		%high(a)
+		ifg a-^d65535,<%msg \., ?Illegal 16 bit value: 'a>  >
+	define ADDR (a) <%low(a)
+		%high(a)
+		ifg a-^d65535,<%msg \., ?Illegal address: 'a> >
+	define %msg(a,b) <if2 <printx a b>>
+	define org(a) <0
+			loc a>
+
+
+;	opcode definitions
+
+	define MOV(A,B) <^o100 + A*8 + B>
+	define MVI(r,val)	< exp <^o10*r + 6>, BYTE(val) >
+	define LXI(r,val)	<exp <r*^o20 + 1>, WORD(val) >
+	define LDA(adr)	< exp ^o72, ADDR(adr) >
+	define STA(adr)	< exp ^o62, ADDR(adr) >
+	define LHLD(adr)< exp ^o52, ADDR(adr) >
+	define SHLD(adr)< exp ^o42, ADDR(adr) >
+	define LDAX(rp)	< rp*^o20 + ^o12 >
+	define STAX(rp) < rp*^o20 + ^o02 >
+	define XCHG	< ^o353 >
+
+
+;----------------- Arithmetic instructions -------------------
+
+	define ADD(r)	< ^o200 + r >
+	define ADI(val)	< exp ^o306, BYTE(val) >
+	define ADC(r)	< ^o210 + r >
+	define ACI(val)	< exp ^o316, BYTE(val) >
+	define SUB(r)	< ^o220 + r >
+	define SUI(val)	<exp ^o326, BYTE(val) >
+	define SBB(r)	< ^o230 + r >
+	define SBI(val)	<exp ^o336, BYTE(val) >
+
+	define INR(a) <a*^o8 + ^o4>
+	define DCR(a) <a*^o8 + ^o5>
+
+	define INX(a) <ifg a-3,<%msg \., ?Illegal register pair: 'a>
+		^o20*a + 3 >
+	define DCX(a) <ifg a-3,<%msg \., ?Illegal register pair: 'a>
+		^o20*a + ^o13 >
+	define DAD(rp)	< rp*^o20 + ^o11 >
+	define DAA	< ^o47 >
+
+
+;---------------------- Logical Group -------------------------
+
+	define ANA(r)	< ^o240 + r >
+	define ANI(val)	< exp ^o346, BYTE(val) >
+	define XRA(r)	< ^o250 + r >
+	define XRI(val) < exp ^o356, BYTE(val) >
+	define ORA(r)	< ^o260 + r >
+	define ORI(val)	< exp ^o366, BYTE(val) >
+	define CMP(r)	< exp ^o270 + r >
+	define CPI(val)	< exp ^o376, BYTE(val) >
+	define RLC <^o007>
+	define RRC <^o017>
+	define RAL <^o027>
+	define RAR <^o037>
+	define CMA <^o057>
+	define STC <^o067>
+	define CMC <^o077>
+
+
+;--------------------------- Branch Group ---------------------------
+
+	define JMP(adr)	< exp ^o303, ADDR(adr) >
+	define JNZ(adr) < exp ^o302, ADDR(adr) >
+	define JZ(adr)	< exp ^o312, ADDR(adr) >
+	define JNC(adr)	< exp ^o322, ADDR(adr) >
+	define JC(adr)	< exp ^o332, ADDR(adr) >
+	define JPO(adr)	< exp ^o342, ADDR(adr) >
+	define JPE(adr)	< exp ^o352, ADDR(adr) >
+	define JP(adr)	< exp ^o362, ADDR(adr) >
+	define JM(adr)	< exp ^o372, ADDR(adr) >
+
+	define CALL(adr) < exp ^o315, ADDR(adr) >
+	define CNZ(adr)	< exp ^o304, ADDR(adr) >
+	define CN(adr)	< exp ^o314, ADDR(adr) >
+	define CNC(adr)	< exp ^o324, ADDR(adr) >
+	define CC(adr)	< exp ^o334, ADDR(adr) >
+	define CPO(adr)	< exp ^o344, ADDR(adr) >
+	define CPE(adr)	< exp ^o354, ADDR(adr) >
+	define CP(adr)	< exp ^o364, ADDR(adr) >
+	define CM(adr)	< exp ^o374, ADDR(adr) >
+
+	define RET	< ^o311 >
+	define RNZ	< ^o300 >
+	define RZ	< ^o310 >
+	define RNC	< ^o320 >
+	define RC	< ^o330 >
+	define RPO	< ^o340 >
+	define RPE	< ^o350 >
+	define RP	< ^o360 >
+	define RM	< ^o370 >
+	define RST(n)	< n*^o10 + ^o307 >
+	define PCHL	< ^o351 >
+
+
+;---------------------- Stack, I/O and Machine Control ---------------------
+
+	define PUSH(rp) < rp*^o20 + ^o305 >
+	define POP(rp)	< rp*^o20 + ^o301 >
+	define XTHL	< ^o343 >
+	define SPHL	< ^o371 >
+	define IN(p)	< exp ^o333, BYTE(p) >
+	define OUT(p)	< exp ^o323, BYTE(p) >
+	define EI	< ^o373 >
+	define DI	< ^o363 >
+	define HLT	< ^o166 >
+	define NOP	< ^o000 >
+	define RIM	< ^o040 >
+	define SIM	< ^o060 >
+
+	Subttl	higher level macros
+
+define .byte(a) <irp a,<%low  a>>
+define ascii8 (a) <irpc a,<%low  "a">
+>
+
+
+	end

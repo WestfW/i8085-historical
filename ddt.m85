@@ -1,0 +1,319 @@
+	title	HDDT for 8085		; -*- MACRO -*-
+	search	8085A,85SYMS
+	init
+
+	U2651			;; use a national 2651 uart
+
+;; Software for 8080A computer: Hexadecimal DDT [sic]
+;; Copyright (C) 1980 by Robert Elton Maas
+;; Modified 1981 by William Westfield
+;; Copyright (C) 1981 by William E Westfield
+
+;System-dependent constants
+
+;Ascii constants
+;LEFT=^O004	;Note, this (^D) is left-cursor only on Beehive 3A.
+LEFT=^O010	;On most other terminals it is ^O010 (^H).
+BELL=^O007
+CR=^O015
+LF=^O012
+ACK=6
+NAK=7
+SLASH=^O057
+STACK==	^D1024*^D16			; 16 K of RAM -- stack goes at the top
+
+
+;Addresses of I/O devices
+DATA==	120 + 14
+STAT==	120 + 15
+MODE==	120 + 16
+COMND==	120 + 17
+
+define .byte(a) <irp a,<%low  a>>
+define ascii8 (a) <irpc a,<%low  "a">
+>
+define crlf <.byte <CR,LF>>
+
+	.directive  sfcond
+
+	org	400
+;	loc	2000*^D63	;FC00	top 1 K of memory in a 64k system
+
+
+INIT:	mvi	A,.NORM
+INIT2:	out	MODE
+	mvi	A,<.MD2 ! .S1200>	;1200 baud default
+	out	MODE
+	mvi	A,<.TENBL!.DTR!.RENBL!.RTS>
+	out	COMND
+RESTRT::
+	mvi	D,377			;type things out to start with.
+	call	ILOT
+		CRLF
+		ascii8 <	    HDDT>
+		CRLF
+		ascii8	<	   ------>
+		CRLF
+		ascii8	<(C) 1980 by Robert Elton Maas>
+		CRLF
+		ascii8	<(C) 1981 by William E Westfield>
+		crlf
+		ascii8	<Version with HEX loader !>
+		CRLF
+		ascii8	<Ready>
+		.byte <cr,lf,0>
+
+
+;;; Now that that is all out of the way, we can get on with the program
+
+;;			-- HDDT --
+;This is a simple interactive memory-examine&deposit program.  The
+; transcript it creates on the CRT is sort of a cross between DDT
+; and Apple Monitor format.
+
+;When program is started you are in Address-set mode.  After completing
+; that, you are in command mode.  From command mode you have the following
+; commands available:
+;^A -- Address-set mode, program goes to new line, user types in four
+;  hexadecimal characters, program opens that location and shows contents;
+;<space> -- Move to next, program shows contents of next location;
+;<rubout> -- Back up, programs backs up to preceding location which must
+;  already be on the screen;
+
+;<any hex digit> -- Deposit, program backs up cursor and lets user
+;  overtype the two hexadecimal characters, program then modifies that
+;  location accordingly.  If you make a mistake, don't worry, just type D
+;  again and overtype again.  If you don't see the mistake until later,
+;  don't worry, just hit <rubout> until the cursor is just after the bad
+;  data, then Deposit good data, then <space> forward to where you were
+;  when you noticed the error;
+;. -- Start new line and show current address and contents.  This is handy
+;  for being sure you are at the address you thought you were at, that you
+;  didn't pick up (insert) or lose (delete) a byte.  It is also handy for
+;  getting on your screen a listing that is organized by branchless segments
+;  of code and shows the address of the start of each segment;
+;! -- Jump to current address (i.e. start or continue program).
+;^Q -- Quiet mode complement -- designed for bootstrapping, no type out
+;^R -- Return.  Usefull if a debugger has "called" HDDTA, deadly otherwise
+
+HDDT:	LXI	SP,STACK
+;	CALL	INISIO
+HDDTA:	CALL	ILOT
+	.BYTE	<CR,LF,0>
+	CALL	HEXIN
+	MOV	H,A
+	CALL	HEXIN
+	MOV	L,A
+HDDTSL:	CALL	ILOT
+	.BYTE	<SLASH,0>
+	CALL	EXAMIN
+	;Fall thru to CMD...
+
+CMD:	CALL	R7CHR
+	CPI	"A"-100
+	JZ	HDDTA
+	CPI	177	;rubout
+	JZ	HDDTRU
+	CPI	" "
+	JZ	HDDTSP
+	CPI	"."
+	JZ	HDDTPE
+	CPI	CR
+	JZ	HDDTPE
+	cpi	LF			;ignore linefeeds.
+	jz	CMD
+	cpi	":"
+	jz	LODHEX			;load Intel Hex format line...
+	CPI	"!"	;"!"
+	JZ	HDDTGO
+	cpi	"R"-100
+	rz
+	cpi	"Q"-100
+	JZ	QUIET
+	cpi	"F"+1
+	jp	BADCHR
+	cpi	"0"
+	jp	DEPOS
+BADCHR:	CALL	ILOT
+	.BYTE	<BELL,0>
+	JMP	CMD
+
+HDDTGO:	PCHL
+
+HDDTPE:	CALL	ILOT
+	.BYTE	<CR,LF,0>
+	MOV	A,H
+	CALL	HEXOUT
+	MOV	A,L
+	CALL	HEXOUT
+	JMP	HDDTSL
+
+DEPOS:	push	PSW
+	CALL	ILOT
+	.BYTE	<LEFT,LEFT,0>
+	pop	PSW
+	CALL	HACKIN
+	MOV	M,A
+	JMP	CMD
+HDDTRU:	DCX	HL
+	CALL	ILOT
+	.BYTE	<LEFT,LEFT,LEFT,0>
+	JMP	CMD
+HDDTSP:	INX	HL
+	CALL	EXAMINE
+	JMP	CMD
+
+QUIET:	MOV	A,D
+	cma
+	mov	D,A
+	jmp	CMD
+
+EXAMIN:	CALL	ILOT
+	.BYTE	<40,0>
+	MOV	A,M
+
+HEXOUT::
+	MOV	E,A
+	RAR
+	RAR
+	RAR
+	RAR
+	CALL	H1OUT
+	MOV	A,E
+;	JMP	H1OUT
+
+H1OUT:	ANI	17
+	CPI	^d10
+	JM	H1OUT1
+	ADI	7
+H1OUT1:	ADI	"0"
+	JMP	OUTCH1
+
+;InLine Output to Terminal
+;Preserves H,L	clobbers A
+ILOT::	XTHL		;Save H,L so that H,L can be used to point to text
+			;Get address of start of text into H,L
+ILOT1:	MOV	A,M	;Get one (next) character or end-of-string signal
+	INX	HL
+	ORA	A	;To set z/nz flag
+	JZ	ILOT9
+	;Not end-of-string yet, output this character..
+	CALL	OUTCH1		;Clobbers B, A preserved
+	JMP	ILOT1
+
+	;Zero is end-of-string signal, all done...
+ILOT9:	XTHL		;Restore original H,L in use by mainline program
+	RET		;Return just after the zero that ended the string
+
+;Clobbers no registers except A where character is returned
+R7CHR::	in	STAT
+	ani	.RxRDY
+	jz	R7CHR
+	in	DATA
+	RET
+
+HEXDIG:	call	r7chr
+HEXDG2:	cpi	"9"+1
+	jm	DECDIG
+	sbi	7
+DECDIG:	push	PSW
+	call	H1OUT
+	pop	PSW
+	ani	17
+	ret
+
+HACKIN:	;simulate HEXIN, if you already have a char in A
+	push	BC
+	call	HEXDG2
+	jmp	HEXROT
+
+HEXIN::	push	BC
+	call	HEXDIG
+HEXROT:	exp	RAL,RAL,RAL,RAL
+	mov	B,A
+	call	HEXDIG
+	add	B
+	pop	BC
+	ret
+
+LODHEX::
+	push	BC
+	push	HL
+	call	ILOT
+	 crlf
+	 .byte	":"
+	mvi	C,0			;we'll put out checksum in C
+	call	HEXIN			;get length
+	mov	B,A			; save in B
+	add	C
+	mov	C,A
+	call	HEXIN
+	mov	H,A			;get load address
+	add	C
+	mov	C,A
+	call	HEXIN
+	mov	L,A
+	add	C
+	mov	C,A
+	call	HEXIN			;get record "type"
+	cpi	1			; start address ?
+	jnz	LODHE2
+	 xthl				; make it the "current address"
+LODHE2:	add	C
+	mov	C,A
+	dcr	B
+	jm	LODCHK
+	call	HEXIN
+	mov	M,A
+	inx	HL
+	jmp	LODHE2
+
+LODCHK:	call	HEXIN			;get host checksum
+	add	C			; added all together, should be 0
+	jz	LODOK
+	mvi	A,NAK
+	jmp	SNDNAK
+LODOK:	mvi	A,ACK
+SNDNAK:	call	OUTCHR			;always transmit
+	pop	HL
+	pop	BC
+	jmp	CMD		;let HDDT use CR to type out current address
+
+OUTCH1:	push	PSW
+	mov	A,D
+	ora	A
+	jnz	OUTCH2
+	pop	PSW
+	ret
+OUTCH2:	pop	PSW			;make OUTCHR routine callable
+OUTCHR::
+	push	PSW			; independently of OUTCH1
+OUTCH3:	in	STAT
+	ani	.TxRDY
+	jz	OUTCH3
+	pop	PSW
+	out	DATA	
+	ret
+
+;miscellaneous routines that might be of use:
+
+CALLHL:	pchl			;indirect call through HL register
+CALLBC:	push	BC
+	ret				;through BC register
+CALLDE:	push	DE
+	ret				;through DE regsiter
+
+repeat 0,<
+xlist;;repeat	<177760-.>,<377>	; room for more PROM programming
+repeat	<177760-.>,<377>		; room for more PROM programming
+list
+	loc 177760			; 8088 Reset vector
+
+	352				; IJMP 00,00
+	000				; start at beginning of memory
+	000
+	000
+	000
+>
+
+	END	HDDT

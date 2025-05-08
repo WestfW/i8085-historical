@@ -1,0 +1,104 @@
+	title	MATH routine for 8085 processor
+	search	8085a
+	init
+
+DIV:	;32 bit by 16 bit divide routine
+	; entry: dividend in HL/DE, divisor in BC
+	; result: quotient in DE, remainder in HL.  CF=0 means overflow.
+	; worst case timeing is 1745. clock cycles.
+	; From 24-feb-82 ELECTRONICs magazine
+
+	mov	A,L		;check for everflow
+	sub	C
+	mov	A,H
+	sbb	B
+	rnc			; return on overflow
+	mov	A,B		; 2's complement BC
+	cma
+	mov	B,A
+	mov	A,C
+	cma
+	mov	C,A
+	inx	BC
+	call	LOOP
+;LOOP divides 3 byte operand by 2 byte divisor
+LOOP:	mov	A,D
+	mov	D,E
+	mvi	E,^d8
+LOOP1:	dad	HL
+	jc	OVER
+	add	a
+	jnc	SUB
+	inx	HL
+SUB:	push	HL
+	dad	BC
+	jc	OK
+	pop	HL
+	dcr	E
+	jnz	LOOP1
+	mov	E,A
+	stc
+	ret
+OK:	inx	SP	;clean up stack
+	inx	SP
+	inr	A
+	dcr	E
+	jnz	LOOP1
+	mov	E,A
+	stc
+	ret
+OVER:	adc	A
+	jnc	OVERSUB
+	inx	HL
+oversub: dad	BC
+	dcr	E
+	jnz	loop1
+	mov	E,A
+	stc
+	ret
+
+MULT:	; 16 x 16 bit multiply
+	; arguments in BC, DE
+	; results in DE/HL
+	; 1023 clock cycles
+	mov	A,E
+	push	DE
+	call	BMULT
+	xthl
+	push	PSW
+	mov	A,H
+	call	BMULT
+	mov	D,A
+	pop	PSW
+	add	H
+	mov	E,A
+	jnc	NC1
+	inr	D
+NC1:	mov	H,L
+	mvi	L,0
+	pop	BC
+	dad	BC
+	rnc
+	inx	DE
+	ret
+
+BMULT:	; 8 x 16 bit multiply
+	; entry: args in A and BC
+	; return: product in A/HL
+	;worst case: 424 cycles
+	lxi	HL,0
+	lxi	DE,7
+	add	A
+BLOOP1:	jnc	ZERO
+	dad	BC
+	adc	D
+ZERO:	dad	HL
+	adc	A
+	dcr	E
+	jnz	BLOOP1
+	rnc
+	dad	BC
+	adc	D
+	ret
+
+	end
